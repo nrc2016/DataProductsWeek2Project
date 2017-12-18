@@ -71,7 +71,8 @@ icons <- awesomeIcons(
 
 df %>% 
   leaflet() %>%
-  addTiles() %>%
+  addProviderTiles(providers$OpenStreetMap) %>%
+#  addTiles() %>%
   addAwesomeMarkers(~lng,
              ~lat,
              clusterOptions=markerClusterOptions(),
