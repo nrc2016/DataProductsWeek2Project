@@ -1,0 +1,85 @@
+---
+title: "Vehicle Collisions in 2012"
+author: "Marvin Zaluski"
+date: "December 17, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(leaflet)
+library(ggmap)
+library(plyr)
+library(scales)
+
+```
+
+```{r map, echo=F, message=F, warning=F}
+
+collision.raw <- read.csv("data/2012_Vehicle_Collisions_Investigated_by_State_Police.csv", header=T)
+collision.raw <- collision.raw[collision.raw$CITY_NAME != "Not Applicable",]
+collision.raw <- collision.raw[collision.raw$CITY_NAME != "",]
+
+cities <- as.character(unique(collision.raw$CITY_NAME))
+cities.state <- paste(cities, "Maryland", sep=",")
+cities.gps <- lapply(cities.state, FUN = function(x) geocode(x))
+cities.gps <- unlist(cities.gps)
+
+
+
+df <- data.frame(name = cities,
+                 lng = cities.gps[which(names(cities.gps)=="lon")],
+                 lat = cities.gps[which(names(cities.gps)=="lat")])
+df <- df[order(df$name),]
+
+accident.count <- count(collision.raw, vars="CITY_NAME")
+accident.count <- accident.count[order(accident.count$CITY_NAME),]
+accident.count$percent <- accident.count$freq/sum(accident.count$freq)
+accident.count$percent.string <- percent(accident.count$percent)
+accident.count$color <- "blue"
+accident.count[accident.count$freq>1, "color"] <- "green"
+accident.count[accident.count$freq>2, "color"] <- "yellow"
+accident.count[accident.count$freq>3, "color"] <- "orange"
+accident.count[accident.count$freq>4, "color"] <- "red"
+
+df$accidents <- accident.count$freq
+df$accident.percent.string <- accident.count$percent.string
+df$accident.color <- accident.count$color
+
+getColor <- function(df) {
+  sapply(df$accidents, function(x) {
+  if(x <= 1) {
+    "blue"
+  } else if(x <= 2) {
+    "green"
+  } else if(x <= 3) {
+    "white"
+  } else if(x <= 4) {
+    "orange"
+  } else { 
+    "red"
+  } })
+}
+
+icons <- awesomeIcons(
+  icon = 'ios-close',
+  iconColor = 'black',
+  library = 'ion',
+  markerColor = getColor(df)
+)
+
+df %>% 
+  leaflet() %>%
+  addTiles() %>%
+  addAwesomeMarkers(~lng,
+             ~lat,
+             clusterOptions=markerClusterOptions(),
+             popup=as.character(paste("<b>City: </b>", df$name,
+                                      "<br><b>Accidents:</b> ", df$accidents,
+                                      "<br><b>State Percentage:</b> ", df$accident.percent.string,
+                                      sep="")),
+             label=as.character(df$name),
+             icon=icons)
+
+```
