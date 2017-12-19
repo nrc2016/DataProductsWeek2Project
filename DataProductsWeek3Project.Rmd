@@ -1,0 +1,84 @@
+---
+title: "Week 3 Assignment"
+author: "Marvin Zaluski"
+date: "December 18, 2017"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(plyr)
+library(scales)
+library(plotly)
+library(RColorBrewer)
+library(tidyr)
+
+```
+
+## Maryland Collisions in 2012
+
+```{r preprocess, echo=F, warning=F, message=F}
+# read in data and filter out empty and not applicable entries
+collision.raw <- read.csv("data/2012_Vehicle_Collisions_Investigated_by_State_Police.csv", header=T)
+
+# keep only focus variables
+collision <- collision.raw[,c("ACC_TIME", "DAY_OF_WEEK", "INJURY", "PROP_DEST")]
+collision$time <- strptime(collision$ACC_TIME, format="%H:%M")
+collision$time <- as.numeric(format(collision$time, "%H"))
+collision$DAY_OF_WEEK <- trimws(collision$DAY_OF_WEEK)
+collision$DAY_OF_WEEK <- factor(collision$DAY_OF_WEEK,
+                                levels=c("SUNDAY", "MONDAY", "TUESDAY",
+                                         "WEDNESDAY", "THURSDAY", "FRIDAY",
+                                         "SATURDAY"))
+
+# calcualte metrics
+hour.count <- count(collision, vars= c("time", "DAY_OF_WEEK"))
+hour.injury.count <- count(collision, vars= c("time", "DAY_OF_WEEK", "INJURY"))
+hour.injury.count <- spread(hour.injury.count, key="INJURY", value="freq")
+hour.injury.count$percent <- hour.injury.count$YES/(hour.injury.count$NO+hour.injury.count$YES)
+hour.damage.count <- count(collision, vars= c("time", "DAY_OF_WEEK", "PROP_DEST"))
+hour.damage.count <- spread(hour.damage.count, key="PROP_DEST", value="freq")
+hour.damage.count$percent <- hour.damage.count$YES / (hour.damage.count$NO+hour.damage.count$YES)
+
+hour.count <- merge(hour.count, hour.injury.count, by=c("time", "DAY_OF_WEEK"), all.x = TRUE)
+hour.count <- merge(hour.count, hour.damage.count, by=c("time", "DAY_OF_WEEK"), all.x = TRUE)
+hour.count <- hour.count[,c(1, 2, 3, 7, 11)]
+colnames(hour.count)[4:5] = c("Injury", "Damage")
+hour.count <- hour.count[order(hour.count$time),]
+hour.count$text <- paste("Day: ", hour.count$DAY_OF_WEEK, "<br>",
+                         "Time: ", hour.count$time, ":00", "<br>",
+                         "Accidents: ", hour.count$freq, "<br>",
+                         "Injury: ", percent(round(hour.count$Injury, 2)), "<br>",
+                         "Property Damage: ", percent(round(hour.count$Damage, 2)), "<br>",
+                         sep="")
+
+```
+
+From the data set, https://catalog.data.gov/dataset/2012-vehicle-collisions-investigated-by-state-police-4fcd0
+
+- In 2012, the State of Maryland had `r format(nrow(collision), big.mark=",")` accidents.
+- `r percent(round(nrow(collision[collision$INJURY=="YES",])/nrow(collision),2))` had injuries and `r percent(round(nrow(collision[collision$PROP_DEST=="YES",])/nrow(collision),2))` resulted in property damage.
+
+### Questions
+
+- Is there any differnce in the number of collisions during weekdays and weekends?
+- Does the time of day influence the number of collisions?
+- Is Friday afternoon a good time to drive?
+
+## Maryland Collisions in 2012
+
+```{r plot, echo=F, warning=F, message=F}
+
+# create the plot
+hour.count %>%
+  plot_ly(x=~time, y=~freq, mode="lines+markers", trace="scatter",
+          color=~DAY_OF_WEEK, sort=FALSE, text=~text) %>%
+  layout(title="Maryland Collisions by Weekday", 
+         xaxis=list(title="Time of Day", ticksuffix=":00"),
+         yaxis=list(title="Frequency"))
+
+```
+
+## Thank you
+
