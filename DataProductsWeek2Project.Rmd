@@ -17,22 +17,24 @@ library(scales)
 
 ```{r map, echo=F, message=F, warning=F}
 
+# read in data and filter out empty and not applicable entries
 collision.raw <- read.csv("data/2012_Vehicle_Collisions_Investigated_by_State_Police.csv", header=T)
 collision.raw <- collision.raw[collision.raw$CITY_NAME != "Not Applicable",]
 collision.raw <- collision.raw[collision.raw$CITY_NAME != "",]
 
+# get all unique cities in the data set and their GPS coordinates
 cities <- as.character(unique(collision.raw$CITY_NAME))
 cities.state <- paste(cities, "Maryland", sep=",")
 cities.gps <- lapply(cities.state, FUN = function(x) geocode(x))
 cities.gps <- unlist(cities.gps)
 
-
-
+# create original data frame for leaflet
 df <- data.frame(name = cities,
                  lng = cities.gps[which(names(cities.gps)=="lon")],
                  lat = cities.gps[which(names(cities.gps)=="lat")])
 df <- df[order(df$name),]
 
+# calculate supplimentary data regarding accident counts, percentages, and color
 accident.count <- count(collision.raw, vars="CITY_NAME")
 accident.count <- accident.count[order(accident.count$CITY_NAME),]
 accident.count$percent <- accident.count$freq/sum(accident.count$freq)
@@ -43,10 +45,12 @@ accident.count[accident.count$freq>2, "color"] <- "yellow"
 accident.count[accident.count$freq>3, "color"] <- "orange"
 accident.count[accident.count$freq>4, "color"] <- "red"
 
+# add the new data as columns to the leaflet data frame
 df$accidents <- accident.count$freq
 df$accident.percent.string <- accident.count$percent.string
 df$accident.color <- accident.count$color
 
+# set the color for the marker
 getColor <- function(df) {
   sapply(df$accidents, function(x) {
   if(x <= 1) {
@@ -54,7 +58,7 @@ getColor <- function(df) {
   } else if(x <= 2) {
     "green"
   } else if(x <= 3) {
-    "white"
+    "gray"
   } else if(x <= 4) {
     "orange"
   } else { 
@@ -62,6 +66,7 @@ getColor <- function(df) {
   } })
 }
 
+# create a special marker for the city
 icons <- awesomeIcons(
   icon = 'ios-close',
   iconColor = 'black',
@@ -69,10 +74,10 @@ icons <- awesomeIcons(
   markerColor = getColor(df)
 )
 
+# create the leaflet
 df %>% 
   leaflet() %>%
   addProviderTiles(providers$OpenStreetMap) %>%
-#  addTiles() %>%
   addAwesomeMarkers(~lng,
              ~lat,
              clusterOptions=markerClusterOptions(),
@@ -81,6 +86,12 @@ df %>%
                                       "<br><b>State Percentage:</b> ", df$accident.percent.string,
                                       sep="")),
              label=as.character(df$name),
-             icon=icons)
+             icon=icons) %>%
+  addLegend("bottomright",
+            colors=rgb(t(col2rgb(c("blue", "green", "gray", "orange", "red")))/255),
+            labels=c("1", "2", "3", "4", "5+"),
+            title="Number of Accidents",
+            opacity=0.5)
 
 ```
+This leaflet demonstration uses the accident data recorded in the State of Maryland from the <a href=https://catalog.data.gov/dataset/2012-vehicle-collisions-investigated-by-state-police-4fcd0>data.gov website</a>. Each marker represents a city in the State where accident data is recorded. A yearly count and percentage of total State accidents is calculated. 
